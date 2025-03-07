@@ -1,45 +1,44 @@
 import sys
 import RPi.GPIO as GPIO
-import RPi.GPIO
 import time
 import Encoder
 
-a = 8
-b = 10
+### Set up GPIO pins
+GPIO.setmode(GPIO.BOARD) # refer to pins as they are numbered on the header
+GPIO.setwarnings(True)   # listed to errors form RPi.GPIO (probaly set false when finished testing)
 
-RPi.GPIO.setmode(RPi.GPIO.BOARD)
-RPi.GPIO.setup(a, RPi.GPIO.IN, pull_up_down=RPi.GPIO.PUD_DOWN)
-RPi.GPIO.setup(b, RPi.GPIO.IN, pull_up_down=RPi.GPIO.PUD_DOWN)
+## GPIO for rotary encoder
+encoder_pin_a = 8
+encoder_pin_b = 10
+GPIO.setup(encoder_pin_a, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(encoder_pin_b, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-#enc = Encoder.Encoder(3, 5)
-oldVal = 0
-pos = 0
-
-delay = 5 # ms delay between digits refresh
-
-selDigit = [40,38,36,32]
+## GPI0 for 7-segment display
 # Digits:   1, 2, 3, 4
-
+selDigit = [40,38,36,32]
+# Segments ref: A, B, C, D, E, F, G
 display_list = [26,24,37,35,33,31,29] # define GPIO ports to use
-#disp.List ref: A ,B ,C ,D ,E ,F ,G
-
-digitDP = 23
-#DOT = GPIO 20
-
-# Use BCM GPIO references instead of physical pin numbers
-GPIO.setmode(GPIO.BOARD)
 
 for pin in display_list:
   GPIO.setup(pin,GPIO.OUT) # setting pins for segments
-
 for pin in selDigit:
   GPIO.setup(pin,GPIO.OUT)   # setting pins for digit selector
   GPIO.output(pin, 0)
-GPIO.setup(digitDP,GPIO.OUT) # setting dot pin
-GPIO.setwarnings(True)
 
-# DIGIT map as array of array ,
-# so that arrSeg[0] shows 0, arrSeg[1] shows 1, etc
+# decimal point on pin 23. Stays off always
+digitDP = 23
+GPIO.setup(digitDP,GPIO.OUT)
+GPIO.output(digitDP,1)
+
+## GPIO for switch
+sw_pin_a = 16
+sw_pin_b = 18
+GPIO.setup(sw_pin_a, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(sw_pin_b, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+### Initializing variables
+
+# DIGIT map as array of array so that arrSeg[0] shows 0, arrSeg[1] shows 1, etc.
 arrSeg = [[0, 0, 0, 0, 0, 0, 1],\
           [1, 0, 0, 1, 1, 1, 1],\
           [0, 0, 1, 0, 0, 1, 0],\
@@ -49,60 +48,90 @@ arrSeg = [[0, 0, 0, 0, 0, 0, 1],\
           [0, 1, 0, 0, 0, 0, 0],\
           [0, 0, 0, 1, 1, 1, 1],\
           [0, 0, 0, 0, 0, 0, 0],\
-          [0, 0, 0, 0, 1, 0, 0]]
-GPIO.output(digitDP,1) # decimal point always off
+          [0, 0, 0, 0, 1, 0, 0],\
+          [1, 1, 1, 1, 1, 1, 1,]] # blank space
+
+
+# for the rotary encoder
+oldVal = 0
+pos = 0
+
+# for the 7-segment display
 value_list = [0, 0, 0, 0]
 digit_value_index = 0
 digit_value = 0
+
+delay = 5 # ms delay between digits refresh
 old_time = time.time()
-while True:
 
-    A = RPi.GPIO.input(a)
-    B = RPi.GPIO.input(b)
-    newVal = int(f"{A}{B}", 2)
-    if (newVal != oldVal):
-        match oldVal:
-            case 0:
-                if (newVal == 1): pos += 1
-                else: pos -= 1
-            case 1:
-                if (newVal == 3): pos += 1
-                else: pos -= 1
-            case 2:
-                if (newVal == 0): pos += 1
-                else: pos -= 1
-            case 3:
-                if (newVal == 2): pos += 1
-                else: pos -= 1
-        print(str(pos), str(value_list))
-    oldVal = newVal
+# for the switch
+old_sw_pos = 0
 
+try:
+    while True:
+        # read in from rotary encoder & determine new position
+        A = GPIO.input(encoder_pin_a)
+        B = GPIO.input(encoder_pin_b)
+        newVal = int(f"{A}{B}", 2)
+        if (newVal != oldVal):
+            match oldVal:
+                case 0:
+                    if (newVal == 1): pos += 1
+                    else: pos -= 1
+                case 1:
+                    if (newVal == 3): pos += 1
+                    else: pos -= 1
+                case 2:
+                    if (newVal == 0): pos += 1
+                    else: pos -= 1
+                case 3:
+                    if (newVal == 2): pos += 1
+                    else: pos -= 1
+            if (pos < 0): pos = 0 # clamp pos greater than 0
+            print(pos)
+        oldVal = newVal
 
-    value = pos
-    for digit_place in range(4):
-        value_list[3 - digit_place] = (int(value / 10**digit_place) % 10)
-    if(value < 1000): value_list[0] = -1
-    if(value < 100): value_list[1] = -1
-    if(value < 10): value_list[2] = -1
-    
-    for segment in range(7):
-        GPIO.output(display_list[segment], arrSeg[digit_value][segment])
-    
-    cur_time = time.time()
-    ellapsed = ((cur_time - old_time) * 1000) % 10
-    if (ellapsed >= delay):
-        GPIO.output(selDigit[digit_value_index], 0)
-        digit_value_index += 1
-        
-        if digit_value_index >= 4: digit_value_index = 0;
-        digit_value = value_list[digit_value_index]
-        GPIO.output(selDigit[digit_value_index], 1)
-        
-        old_time = cur_time
-        ellapsed = 0
+        # divide pos variable into a list of 4 digits to display. -1 to denote a blank space
+        value = pos
+        for digit_place in range(4):
+            value_list[3 - digit_place] = (int(value / 10**digit_place) % 10)
+        if(value < 1000): value_list[0] = -1
+        if(value < 100): value_list[1] = -1
+        if(value < 10): value_list[2] = -1
         
         
+        # when "delay" ms have ellasped
+        cur_time = time.time()
+        ellapsed = ((cur_time - old_time) * 1000) % 10
+        if (ellapsed >= delay):
+            GPIO.output(selDigit[digit_value_index], 0)
+            digit_value_index += 1
+            
+            if digit_value_index >= 4: digit_value_index = 0;
+            digit_value = value_list[digit_value_index]
+            GPIO.output(selDigit[digit_value_index], 1)
+            
+            old_time = cur_time
+            ellapsed = 0
         
+        for segment in range(7):
+            GPIO.output(display_list[segment], arrSeg[digit_value][segment])
         
-        
-    
+        # read in position from switch
+        if GPIO.input(sw_pin_a) == GPIO.HIGH: cur_sw_pos = 1
+        elif GPIO.input(sw_pin_b) == GPIO.HIGH: cur_sw_pos = -1
+        else: cur_sw_pos = 0
+            
+        if ((cur_sw_pos != old_sw_pos) & (cur_sw_pos != 0)):
+            print("Switch position:", cur_sw_pos)
+            old_sw_pos = cur_sw_pos
+
+# misc. interput catches for if the script crashes
+except KeyboardInterrupt:
+    print("\nStopping...")
+
+except Exception as e:
+    print("Error:", e)
+
+finally:
+    GPIO.cleanup()
