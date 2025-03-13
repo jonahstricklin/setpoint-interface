@@ -3,7 +3,7 @@ from opcua import Client, ua
 
 
 # OPC UA Server Details
-opcua_url = "opc.tcp://192.168.1.100:4990/FactoryTalkLinxGateway22"
+opcua_url = "opc.tcp://192.168.1.100:4990/FactoryTalkLinxGateway"
 tag_node_id = "ns=13;s=TagGroup03#[HTS_CTRL]HTS_CRTL_Data_From_HMI.PiConfirmation"
 tag_node_id_ret = "ns=13;s=TagGroup03#[HTS_CTRL]HTS_CRTL_Data_From_HMI.SystemState"
 tag_node_id_ret1 = "ns=13;s=TagGroup03#[HTS_CTRL]HTS_CRTL_Data_From_HMI.SystemState"

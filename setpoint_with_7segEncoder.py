@@ -2,6 +2,15 @@ import sys
 import RPi.GPIO as GPIO
 import time
 import Encoder
+from opcua import Client, ua
+
+# OPC UA Server Details
+opcua_url = "opc.tcp://192.168.1.100:4990/FactoryTalkLinxGateway1"
+setpoint_tag_id = "ns=13;s=TagGroup03#[HTS_CTRL]HTS_CRTL_Data_From_HMI.SystemState"  
+#cur_temp_tag = "ns=13;s=TagGroup03#[HTS_CTRL]HTS_CRTL_Data_From_HMI.PiConfirmation"
+
+# Create OPC UA Client instance
+client = Client(opcua_url)
 
 ### Set up GPIO pins
 GPIO.setmode(GPIO.BOARD) # refer to pins as they are numbered on the header
@@ -37,8 +46,15 @@ GPIO.setup(sw_pin_a, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(sw_pin_b, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 ### Initializing variables
+# for the rotary encoder
+oldVal = 0
+pos = 0
 
-# DIGIT map as array of array so that arrSeg[0] shows 0, arrSeg[1] shows 1, etc.
+# for the 7-segment display
+value_list = [0, 0, 0, 0]
+digit_value_index = 0
+digit_value = 0
+# character map as array of array so that arrSeg[0] shows 0, arrSeg[1] shows 1, etc.
 arrSeg = [[0, 0, 0, 0, 0, 0, 1],\
           [1, 0, 0, 1, 1, 1, 1],\
           [0, 0, 1, 0, 0, 1, 0],\
@@ -51,23 +67,24 @@ arrSeg = [[0, 0, 0, 0, 0, 0, 1],\
           [0, 0, 0, 0, 1, 0, 0],\
           [1, 1, 1, 1, 1, 1, 1,]] # blank space
 
-
-# for the rotary encoder
-oldVal = 0
-pos = 0
-
-# for the 7-segment display
-value_list = [0, 0, 0, 0]
-digit_value_index = 0
-digit_value = 0
-
-delay = 5 # ms delay between digits refresh
+delay = 4 # ms delay between digits refresh
 old_time = time.time()
 
 # for the switch
 old_sw_pos = 0
 
 try:
+    if (input("Connecting to HMI server? (y/n) ") == "y"): # only for testing purposes
+        print("Connecting to OPC UA Server...")
+        client.connect()
+        print("Connected to FactoryTalk Linx Gateway OPC UA Server")
+
+        # Get reference to the tag node
+        setpoint_tag = client.get_node(setpoint_tag_id)
+#         setpoint_value = setpoint_tag.get_value()
+#         print(f"setpoint_value: {setpoint_tag_id}")   #Micah Edited
+#         print(f"setpoint_value: {setpoint_value}")   #Micah Edited
+    
     while True:
         # read in from rotary encoder & determine new position
         A = GPIO.input(encoder_pin_a)
@@ -93,6 +110,7 @@ try:
 
         # divide pos variable into a list of 4 digits to display. -1 to denote a blank space
         value = pos
+        
         for digit_place in range(4):
             value_list[3 - digit_place] = (int(value / 10**digit_place) % 10)
         if(value < 1000): value_list[0] = -1
@@ -118,7 +136,9 @@ try:
             GPIO.output(display_list[segment], arrSeg[digit_value][segment])
         
         # read in position from switch
-        if GPIO.input(sw_pin_a) == GPIO.HIGH: cur_sw_pos = 1
+        if GPIO.input(sw_pin_a) == GPIO.HIGH:
+            cur_sw_pos = 1
+            setpoint_tag.set_value(ua.Variant(value))
         elif GPIO.input(sw_pin_b) == GPIO.HIGH: cur_sw_pos = -1
         else: cur_sw_pos = 0
             
@@ -134,4 +154,9 @@ except Exception as e:
     print("Error:", e)
 
 finally:
+    try:
+        client.disconnect()
+        print("Disconnected from OPC UA Server.")
+    except Exception as e:
+        print("Error disconnecting:", e)
     GPIO.cleanup()
