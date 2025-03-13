@@ -6,7 +6,7 @@ from opcua import Client, ua
 
 # OPC UA Server Details
 opcua_url = "opc.tcp://192.168.1.100:4990/FactoryTalkLinxGateway1"
-setpoint_tag_id = "ns=13;s=TagGroup03#[HTS_CTRL]HTS_CRTL_Data_From_HMI.SystemState"  
+setpoint_tag_id = "ns=14;s=TagGroup01#[HTS_CTRL]HTS_CRTL_Data_From_HMI.SystemState"  
 #cur_temp_tag = "ns=13;s=TagGroup03#[HTS_CTRL]HTS_CRTL_Data_From_HMI.PiConfirmation"
 
 # Create OPC UA Client instance
@@ -80,10 +80,7 @@ try:
         print("Connected to FactoryTalk Linx Gateway OPC UA Server")
 
         # Get reference to the tag node
-        setpoint_tag = client.get_node(setpoint_tag_id)
-#         setpoint_value = setpoint_tag.get_value()
-#         print(f"setpoint_value: {setpoint_tag_id}")   #Micah Edited
-#         print(f"setpoint_value: {setpoint_value}")   #Micah Edited
+        setpoint_tag_node = client.get_node(setpoint_tag_id)
     
     while True:
         # read in from rotary encoder & determine new position
@@ -138,7 +135,7 @@ try:
         # read in position from switch
         if GPIO.input(sw_pin_a) == GPIO.HIGH:
             cur_sw_pos = 1
-            setpoint_tag.set_value(ua.Variant(value))
+            setpoint_tag_node.set_value(ua.Variant(value))
         elif GPIO.input(sw_pin_b) == GPIO.HIGH: cur_sw_pos = -1
         else: cur_sw_pos = 0
             
